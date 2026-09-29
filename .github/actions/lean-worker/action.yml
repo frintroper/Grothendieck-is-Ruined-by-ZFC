@@ -1,0 +1,42 @@
+name: lean-worker
+
+description: Run a reproducible Lean build and fail closed on proof holes.
+author: meta-introspector
+
+inputs:
+  build:
+    description: Run lake build after setting up Lean.
+    required: false
+    default: "true"
+  check-sorries:
+    description: Fail if source files contain sorry or admit.
+    required: false
+    default: "true"
+  source-dir:
+    description: Directory to scan for Lean sources.
+    required: false
+    default: "src"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Lean and build dependencies
+      if: inputs.build == 'true'
+      uses: meta-introspector/lean-action@v1
+      with:
+        build: false
+
+    - name: Check for proof holes
+      if: inputs.check-sorries == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if grep -RInE --include='*.lean' '(^|[^[:alnum:]_])(sorry|admit)([^[:alnum:]_]|$)' "${{ inputs.source-dir }}"; then
+          echo 'Proof holes found in Lean sources.' >&2
+          exit 1
+        fi
+
+    - name: Build Lean project
+      if: inputs.build == 'true'
+      shell: bash
+      run: lake build
